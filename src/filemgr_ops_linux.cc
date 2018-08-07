@@ -27,6 +27,8 @@
 #include "filemgr.h"
 #include "filemgr_ops.h"
 
+#define MAX_READ_RETRY (60) // 500 ms * 60 = 30 seconds
+
 #if !defined(WIN32) && !defined(_WIN32)
 
 int _filemgr_linux_open(const char *pathname, int flags, mode_t mode)
@@ -46,9 +48,25 @@ int _filemgr_linux_open(const char *pathname, int flags, mode_t mode)
 ssize_t _filemgr_linux_pwrite(int fd, void *buf, size_t count, cs_off_t offset)
 {
     ssize_t rv;
+    volatile ssize_t local_errno;
+    int num_retry = 0;
     do {
-        rv = pwrite(fd, buf, count, offset);
-    } while (rv == -1 && errno == EINTR); // LCOV_EXCL_LINE
+        do {
+            rv = pwrite(fd, buf, count, offset);
+        } while (rv == -1 && errno == EINTR); // LCOV_EXCL_LINE
+
+        // TODO: need to check `errno`?
+        if (count && rv != (ssize_t)count) {
+            usleep(500000); // 500 ms
+            num_retry++;
+            continue;
+        }
+        break;
+    } while (num_retry < MAX_READ_RETRY);
+
+    // For debugging purpose.
+    local_errno = errno;
+    (void)local_errno;
 
     if (rv < 0) {
         return (ssize_t) convert_errno_to_fdb_status(errno, // LCOV_EXCL_LINE
@@ -60,9 +78,25 @@ ssize_t _filemgr_linux_pwrite(int fd, void *buf, size_t count, cs_off_t offset)
 ssize_t _filemgr_linux_pread(int fd, void *buf, size_t count, cs_off_t offset)
 {
     ssize_t rv;
+    volatile ssize_t local_errno;
+    int num_retry = 0;
     do {
-        rv = pread(fd, buf, count, offset);
-    } while (rv == -1 && errno == EINTR); // LCOV_EXCL_LINE
+        do {
+            rv = pread(fd, buf, count, offset);
+        } while (rv == -1 && errno == EINTR); // LCOV_EXCL_LINE
+
+        // TODO: need to check `errno`?
+        if (count && rv != (ssize_t)count) {
+            usleep(500000); // 500 ms
+            num_retry++;
+            continue;
+        }
+        break;
+    } while (num_retry < MAX_READ_RETRY);
+
+    // For debugging purpose.
+    local_errno = errno;
+    (void)local_errno;
 
     if (rv < 0) {
         return (ssize_t) convert_errno_to_fdb_status(errno, // LCOV_EXCL_LINE
