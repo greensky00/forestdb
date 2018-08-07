@@ -4509,6 +4509,7 @@ fdb_commit_start:
     if (wal_flushed) {
         wal_release_flushed_items(handle->file, &flush_items);
     }
+    handle->cur_header_revnum = fdb_set_file_header(handle, true);
 
     btreeblk_reset_subblock_info(handle->bhandle);
 
